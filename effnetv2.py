@@ -47,7 +47,8 @@ class args:
     T_max = epochs - 1
     weight_decay = 2e-3
 
-    save_path = './models/'
+    save_path = './models_2/'
+    earlystop_patience = 5
 
 
 
@@ -116,6 +117,9 @@ folds = GroupKFold(n_splits=5)
 train_df['fold_id'] = -1
 for fold_id,(train_idx,valid_idx) in enumerate(folds.split(train_df,groups=train_df.StudyInstanceUID.tolist())):
     train_df.loc[valid_idx,'fold_id'] = fold_id
+
+# %%
+train_df
 
 # %%
 rotate_limit = 20
@@ -188,6 +192,9 @@ class MyDataset(torch.utils.data.Dataset):
         else:
             raise ValueError('mode must be train or valid or test')
         
+
+# %%
+train_dataset = MyDataset(train_df,transform=[transform_train,transform_train_image],mode='train')
 
 # %% [markdown]
 # Model
@@ -404,10 +411,13 @@ def get_dataloader(fold,df):
     valid_dataloader = DataLoader(valid_dataset,batch_size=args.batch_size,shuffle=False,num_workers=args.n_worker,pin_memory=True)
 
     return train_dataloader,valid_dataloader
-model = Effnetv2()
-model.to(device)
-os.makedirs(args.save_path,exist_ok=True)
+
+
 for fold in range(5):
+    save_path_fold = os.path.join(args.save_path,f'fold_{fold}')
+    os.makedirs(save_path_fold,exist_ok=True)
+    model = Effnetv2()
+    model.to(device)
     train_dataloader,valid_dataloader = get_dataloader(fold,train_df)
     trainer = Trainer(model,train_dataloader,valid_dataloader)
     if args.optimizer == 'AdamW':
@@ -431,17 +441,23 @@ for fold in range(5):
         raise ValueError('scheduler must be CosineAnnealingWarmRestarts or CosineAnnealingLR or ReduceLROnPlateau')
     best = 0
     best_epoch = 0
-    
+    early_stop = 0
+
     for epoch in range(args.epochs):
         train_losses,train_accs,optimizer = trainer.train(train_dataloader,valid_dataloader=valid_dataloader,device=device,loss_fn=args.loss_fn,aux_loss=args.aux_loss,optimizer=optimizer,aux_weight=args.loss1_coef)
         valid_losses,valid_accs,valid_preds,ap = trainer.valid(valid_dataloader,device=device,loss_fn=args.loss_fn)
         scheduler.step()
         if ap > best:
+            early_stop = 0
             best = ap
             best_epoch = epoch
+        else:
+            early_stop += 1
+        if early_stop >= args.earlystop_patience:
+            break
         print(f'epoch:{epoch},train_loss:{np.mean(train_losses)},train_acc:{np.mean(train_accs)},valid_loss:{np.mean(valid_losses)},valid_acc:{np.mean(valid_accs)}')
-        torch.save(model.state_dict(),os.path.join(args.save_path,f'fold{fold}_epoch{epoch}.pth'))
-    shutil.copy(os.path.join(args.save_path,f'fold{fold}_epoch{best_epoch}.pth'),os.path.join(args.save_path,f'fold{fold}_best.pth'))
+        torch.save(model.state_dict(),os.path.join(save_path_fold,f'epoch{epoch}.pth'))
+    shutil.copy(os.path.join(save_path_fold,f'epoch{best_epoch}.pth'),os.path.join(save_path_fold,f'best_epoch{best_epoch}_ap{best}.pth'))
     wandb.log({"best_epoch": best_epoch,"best_ap":best})
 
 # %%
