@@ -21,34 +21,59 @@ set_seed()
 from scipy import optimize
 
 
-class args:
-    batch_size = 12
-    n_worker = 8
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--batch_size', type=int, default=12)
+parser.add_argument('--n_worker', type=int, default=8)
+parser.add_argument('--image_size', type=int, default=512)
+parser.add_argument('--arch_name', type=str, default='tf_efficientnetv2_l.in21k')
+parser.add_argument('--epochs', type=int, default=20)
+parser.add_argument('--lr', type=float, default=1e-4)
+parser.add_argument('--drop_rate', type=float, default=0.45)
+parser.add_argument('--drop_path_rate', type=float, default=0.1)
+parser.add_argument('--loss_fn', type=str, default='FocalLoss')
+parser.add_argument('--focal_alpha', type=float, default=0.6)
+parser.add_argument('--focal_gamma', type=float, default=1.8)
+parser.add_argument('--aux_loss', type=str, default='binary_cross_entropy')
+parser.add_argument('--loss1_coef', type=float, default=1)
+parser.add_argument('--optimizer', type=str, default='AdamW')
+parser.add_argument('--scheduler', type=str, default='CosineAnnealingLR')
+parser.add_argument('--scheduler_warmup', type=str, default=None)
+parser.add_argument('--warmup_factor', type=float, default=2)
+parser.add_argument('--warmup_epo', type=int, default=5)
+parser.add_argument('--T_max', type=int, default=19)
+parser.add_argument('--weight_decay', type=float, default=2e-3)
+parser.add_argument('--save_path', type=str, default='./models/')
+parser.add_argument('--earlystop_patience', type=int, default=5)
+args = parser.parse_args()
+# class args:
+#     batch_size = 12
+#     n_worker = 8
 
-    image_size = 512
-    arch_name = 'tf_efficientnetv2_l.in21k'
-    epochs = 20
-    lr = 1e-4
-    drop_rate = 0.45
-    drop_path_rate = 0.1
+#     image_size = 512
+#     arch_name = 'tf_efficientnetv2_l.in21k'
+#     epochs = 20
+#     lr = 1e-4
+#     drop_rate = 0.45
+#     drop_path_rate = 0.1
 
-    loss_fn = "FocalLoss"
-    focal_alpha = 0.6
-    focal_gamma = 1.8
-    aux_loss = 'binary_cross_entropy'
+#     loss_fn = "FocalLoss"
+#     focal_alpha = 0.6
+#     focal_gamma = 1.8
+#     aux_loss = 'binary_cross_entropy'
 
 
-    loss1_coef = 1
-    optimizer = 'AdamW'
-    scheduler = 'CosineAnnealingLR'
-    scheduler_warmup = None # "GradualWarmupSchedulerV3"
-    warmup_factor = 2
-    warmup_epo = 5
-    T_max = epochs - 1
-    weight_decay = 2e-3
+#     loss1_coef = 1
+#     optimizer = 'AdamW'
+#     scheduler = 'CosineAnnealingLR'
+#     scheduler_warmup = None # "GradualWarmupSchedulerV3"
+#     warmup_factor = 2
+#     warmup_epo = 5
+#     T_max = epochs - 1
+#     weight_decay = 2e-3
 
-    save_path = './models_2/'
-    earlystop_patience = 5
+#     save_path = './models_2/'
+#     earlystop_patience = 5
 
 
 
@@ -106,7 +131,7 @@ train_df['id_image'] = train_df['id_image'].apply(lambda x: x.replace('_image','
 train_df
 
 # %%
-train_df['filepath'] = './tmp/train/'+train_df['id_image']+'.png'
+train_df['filepath'] = f'./tmp_{args.image_size}/train/'+train_df['id_image']+'.png'
 
 # %%
 from sklearn.model_selection import GroupKFold
@@ -278,8 +303,7 @@ class Effnetv2(nn.Module):
 
 # %%
 import wandb
-wandb.init(project='siim-covid19-detection',name='effnetv2')
-
+wandb.init(project='siim-covid19-detection',name=f'effnetv2_{args.image_size}',config=args)
 
 # %%
 from enum import auto
@@ -328,7 +352,8 @@ class Trainer:
                 mask_img = mask_img.to(device)
                 mask_img = mask_img[:,0:1,:,:]
                 # print(mask_img)
-                mask_img = F.interpolate(mask_img,(32,32), mode='bilinear', align_corners=False)
+                ts = args.image_size // 16
+                mask_img = F.interpolate(mask_img,(ts,ts), mode='bilinear', align_corners=False)
                 
                 label = label.to(device)
                 with autocast():
@@ -418,6 +443,7 @@ for fold in range(5):
     os.makedirs(save_path_fold,exist_ok=True)
     model = Effnetv2()
     model.to(device)
+    wandb.watch(model)
     train_dataloader,valid_dataloader = get_dataloader(fold,train_df)
     trainer = Trainer(model,train_dataloader,valid_dataloader)
     if args.optimizer == 'AdamW':
@@ -447,6 +473,7 @@ for fold in range(5):
         train_losses,train_accs,optimizer = trainer.train(train_dataloader,valid_dataloader=valid_dataloader,device=device,loss_fn=args.loss_fn,aux_loss=args.aux_loss,optimizer=optimizer,aux_weight=args.loss1_coef)
         valid_losses,valid_accs,valid_preds,ap = trainer.valid(valid_dataloader,device=device,loss_fn=args.loss_fn)
         scheduler.step()
+        wandb.log({"lr": optimizer.param_groups[0]['lr']})
         if ap > best:
             early_stop = 0
             best = ap
@@ -456,8 +483,8 @@ for fold in range(5):
         if early_stop >= args.earlystop_patience:
             break
         print(f'epoch:{epoch},train_loss:{np.mean(train_losses)},train_acc:{np.mean(train_accs)},valid_loss:{np.mean(valid_losses)},valid_acc:{np.mean(valid_accs)}')
-        torch.save(model.state_dict(),os.path.join(save_path_fold,f'epoch{epoch}.pth'))
-    shutil.copy(os.path.join(save_path_fold,f'epoch{best_epoch}.pth'),os.path.join(save_path_fold,f'best_epoch{best_epoch}_ap{best}.pth'))
+        torch.save(model.state_dict(),os.path.join(save_path_fold,f'fold{fold}_epoch{epoch}.pth'))
+    shutil.copy(os.path.join(save_path_fold,f'fold{fold}_epoch{best_epoch}.pth'),os.path.join(save_path_fold,f'best_fold{fold}_epoch{best_epoch}_ap{best}.pth'))
     wandb.log({"best_epoch": best_epoch,"best_ap":best})
 
 # %%
