@@ -1,0 +1,35 @@
+{
+    "os": "Linux-5.19.0-42-generic-x86_64-with-debian-bookworm-sid",
+    "python": "3.7.16",
+    "heartbeatAt": "2023-06-29T14:57:04.056583",
+    "startedAt": "2023-06-29T14:57:02.630564",
+    "docker": null,
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "gpu_count": 1,
+    "cpu_count": 32,
+    "cuda": null,
+    "args": [
+        "--image_size",
+        "512",
+        "--data",
+        "./data_640/fold0/data.yaml",
+        "--batch_size",
+        "32",
+        "--fold",
+        "0",
+        "--epochs",
+        "100"
+    ],
+    "state": "running",
+    "program": "yolov8.py",
+    "codePath": "yolov8.py",
+    "git": {
+        "remote": "git@github.com:outerform/DeepLearningCourse-Project.git",
+        "commit": "23e1623bff1029dbb22965c8824137755458ee5c"
+    },
+    "email": "outerform@outlook.com",
+    "root": "/home/outerform/github-repo/DeepLearningCourse-Project",
+    "host": "outerform-OMEN-by-HP-45L-Gaming-Desktop-GT22-1xxx",
+    "username": "outerform",
+    "executable": "/home/outerform/anaconda3/envs/ml/bin/python"
+}

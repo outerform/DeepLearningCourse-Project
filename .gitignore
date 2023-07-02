@@ -160,5 +160,8 @@ cython_debug/
 #.idea/
 
 siim-covid19-detection/*
-tmp/*
-data/*
+tmp*
+data*
+*.pt
+*.pth
+siim-covid19-detection.zip
