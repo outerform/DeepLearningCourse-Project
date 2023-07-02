@@ -1,0 +1,1 @@
+{"train_loss": 0.19243397500061388, "train_acc": 0.9006250175833702, "_timestamp": 1687871354, "_runtime": 11254, "_step": 504, "valid_loss": 0.09362237396539366, "valid_acc": 0.811320776084684, "average_precision_score": 0.8544869384734505, "best_epoch": 9, "best_ap": 0.8745943231121824, "_wandb": {"runtime": 11252}}

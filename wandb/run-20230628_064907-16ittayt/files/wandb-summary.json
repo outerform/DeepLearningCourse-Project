@@ -1,0 +1,1 @@
+{"train/box_loss": 2.25096, "train/cls_loss": 3.03879, "train/dfl_loss": 2.34445, "_timestamp": 1687906302, "_runtime": 155, "lr/pg0": 0.0005530455974842767, "lr/pg1": 0.0005530455974842767, "lr/pg2": 0.0005530455974842767, "_step": 1, "_wandb": {"runtime": 165}}
